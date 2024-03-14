@@ -1,0 +1,566 @@
+Program.Sub.ScreenSU.Start
+Gui.frmExport..Create
+Gui.frmExport..Caption("Export to Programming")
+Gui.frmExport..Size(6570,1950)
+Gui.frmExport..MinX(0)
+Gui.frmExport..MinY(0)
+Gui.frmExport..Position(0,0)
+Gui.frmExport..BackColor(-2147483633)
+Gui.frmExport..MousePointer(0)
+Gui.frmExport..Event(UnLoad,frmExport_UnLoad)
+Gui.frmExport.lbl1.Create(Label,"From Job:",True,870,255,0,225,165,True,0,"Arial",8,-2147483633,0)
+Gui.frmExport.lbl2.Create(Label,"Suffix:",True,675,255,0,1770,180,True,0,"Arial",8,-2147483633,0)
+Gui.frmExport.txtFromJob.Create(TextBox,"",True,1395,300,0,210,405,True,0,"Arial",8,-2147483643,1)
+Gui.frmExport.txtFromSuffix.Create(TextBox,"",True,525,300,0,1785,390,True,0,"Arial",8,-2147483643,1)
+Gui.frmExport.cmdFrom.Create(Button)
+Gui.frmExport.cmdFrom.Size(540,375)
+Gui.frmExport.cmdFrom.Position(2400,345)
+Gui.frmExport.cmdFrom.Caption("^")
+Gui.frmExport.cmdFrom.Event(Click,cmdFrom_Click)
+Gui.frmExport.txtToJob.Create(TextBox,"",True,1215,300,0,3495,405,True,0,"Arial",8,-2147483643,1)
+Gui.frmExport.txtToSuffix.Create(TextBox,"",True,480,300,0,4995,390,True,0,"Arial",8,-2147483643,1)
+Gui.frmExport.cmdTo.Create(Button)
+Gui.frmExport.cmdTo.Size(540,375)
+Gui.frmExport.cmdTo.Position(5625,345)
+Gui.frmExport.cmdTo.Caption("^")
+Gui.frmExport.cmdTo.Event(Click,cmdTo_Click)
+Gui.frmExport.lbl3.Create(Label,"To Job:",True,870,255,0,3525,180,True,0,"Arial",8,-2147483633,0)
+Gui.frmExport.lbl4.Create(Label,"Suffix:",True,630,255,0,4995,180,True,0,"Arial",8,-2147483633,0)
+Gui.frmExport.cmdJobs.Create(Button)
+Gui.frmExport.cmdJobs.Size(2235,375)
+Gui.frmExport.cmdJobs.Position(180,840)
+Gui.frmExport.cmdJobs.Caption("CADMAN JOB EXPORT")
+Gui.frmExport.cmdJobs.Event(Click,cmdJobs_Click)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+v.Global.lAutoNum.Declare(long)
+v.Global.sSDIDrawPath.Declare(string)
+v.Global.sSDIDrawPath.Set("\\mf-vglobalshop\apps\Watch\Temp\")
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.ODBC.Connection!CON.opencompanyconnection
+gui.frmExport..Show
+Program.Sub.Main.End
+
+Program.Sub.createTables.Start
+f.ODBC.Connection!conA.opencompanyconnection
+f.Intrinsic.Control.If(v.DataTable.dtOper.Exists,=,False)
+	f.Data.DataTable.CreateFromSQL("dtOper","conA","select JOB, SUFFIX, PART, IF (SUBSTRING (JOB_OPERATIONS .DATE_DUE ,5 ,2 )<= '99' AND SUBSTRING (JOB_OPERATIONS .DATE_DUE ,5 ,2 )>= '00' AND SUBSTRING (JOB_OPERATIONS .DATE_DUE ,1 ,2 )<= '12' AND SUBSTRING (JOB_OPERATIONS .DATE_DUE ,1 ,2 )>= '01' AND SUBSTRING (JOB_OPERATIONS .DATE_DUE ,3 ,2 )<= '31' AND SUBSTRING (JOB_OPERATIONS .DATE_DUE ,3 ,2 )>= '01' ,IF (SUBSTRING (JOB_OPERATIONS .DATE_DUE ,5 ,2 )< '80' ,CONVERT ('20' +SUBSTRING (JOB_OPERATIONS .DATE_DUE ,5 ,2 )+'-' +SUBSTRING (JOB_OPERATIONS .DATE_DUE ,1 ,2 )+'-' +SUBSTRING (JOB_OPERATIONS .DATE_DUE ,3 ,2 ),SQL_DATE ),CONVERT ('19' +SUBSTRING (JOB_OPERATIONS .DATE_DUE ,5 ,2 )+'-' +SUBSTRING (JOB_OPERATIONS .DATE_DUE ,1 ,2 )+'-' +SUBSTRING (JOB_OPERATIONS .DATE_DUE ,3 ,2 ),SQL_DATE )),CONVERT ('1900-01-01' ,SQL_DATE ))DATE_DUE from JOB_OPERATIONS",true)
+f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.If(v.DataTable.dtJobs.Exists,=,False)
+	f.Data.DataTable.CreateFromSQL("dtJobs","conA","SELECT JOB, SUFFIX, PART, DESCRIPTION, QTY_ORDER, CUSTOMER, CUSTOMER_PO FROM JOB_HEADER",true)
+f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.If(v.DataTable.dtMats.Exists,=,False)
+	F.Data.DataTable.CreateFromSQL("dtMats","conA","SELECT TB1.JOB,TB1.SUFFIX ,TB1.PART ,TB1.DESCRIPTION ,TB2.DESCRIPTION_2, TB2.DESCRIPTION_3 ,TB2.THICKNESS FROM JOB_OPERATIONS TB1 LEFT JOIN V_INVENTORY_ALL TB2 ON TB1 .PART = TB2.PART  WHERE TB1 .LMO = 'M' AND TB1 .SEQ ='000200' ORDER BY TB1 .JOB DESC",true)
+f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.If(v.DataTable.dtLink.Exists,=,False)
+	F.Data.DataTable.CreateFromSQL("dtLink","conA","select * from LINK_DATA WHERE TYPE='00030'",true)
+f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.If(v.DataTable.dtDocA.Exists,=,False)
+	F.Data.DataTable.CreateFromSQL("dtDocA","conA","select * from ATG_DOC_ASSOC",true)
+f.Intrinsic.Control.EndIf
+f.ODBC.Connection!conA.Close
+Program.Sub.createTables.End
+
+Program.Sub.JOBNestingExport.Start
+F.Intrinsic.Control.Try
+v.Local..BulkDeclareString(sCustomer,sXMLFile,sCADMANFileJob,sCADMANPathJob,sJobStamp,ssql,spart,sdesc,spartdesc,sJob,sSuffix,sJobSuffix,sSearch,sret,sYear,sMonth,sDay)
+V.Local.fQuantity.Declare(Float)
+v.Local.i.Declare(long)
+V.Local.j.Declare(long)
+V.Local.dDueDate.Declare(Date)
+
+'Set File Path for Import
+F.Intrinsic.String.Concat(v.Caller.LocalGSSTempDir,"\",v.Local.scadmanpathjob)
+f.Intrinsic.string.Format(v.Ambient.NOW,"YYYYMMDDNNSS",v.Local.sJobStamp)
+f.Intrinsic.String.Concat(v.Local.sJobStamp,"CADMANJOB.xml",v.Local.sCADMANFileJob)
+f.Intrinsic.Math.Add(v.Global.lAutoNum,1,v.Global.lAutoNum)
+f.Intrinsic.String.Concat("xmlDoc",v.Global.lAutoNum,v.Local.sXMLFile)
+
+'Create the XML Head
+F.global.xml.createDocument(v.local.sXMLFile,False,True,False,False)
+F.global.xml.SetRoot(v.local.sXMLFile,"CADMAN")
+F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"Version","1")
+
+'Create the Elements Next
+F.Global.XML.CreateElementNode(v.local.sXMLFile,"PRODUCTIONORDERIMPORT","")
+F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"Version","1")
+F.Global.XML.SetAttributeToNode(v.local.sXMLFile,"PRODUCTIONORDERIMPORT","Version")
+F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"Version","1")
+F.Global.XML.SetAttributeToNode(v.local.sXMLFile,"CADMAN","Version")
+
+F.Global.XML.CreateElementNode(v.local.sXMLFile,"PRODUCTIONORDERLIST","")
+F.Global.XML.AppendNodeToRoot(v.local.sXMLFile,"PRODUCTIONORDERIMPORT")
+f.Intrinsic.Control.CallSub(SDIGuts,"sXML",v.Local.sXMLfile,"sCADMANJOB","Y")
+
+F.Global.XML.AppendNode(v.local.sXMLFile,"PRODUCTIONORDERIMPORT","PRODUCTIONORDERLIST")
+'Loop through all values
+f.Intrinsic.Control.For(v.Local.i,0,v.DataTable.dtNests.RowCount--,1)
+	'This is CADMAN jobs
+	F.Intrinsic.Control.If(v.DataTable.dtNests(v.Local.i).PART!FieldValTrim,=,"PRO1")	
+		'Grab the values of the job header
+		v.Local.sJob.Set(v.DataTable.dtNests(v.Local.i).JOB!FIELDVALTRIM)
+		v.Local.sSuffix.Set(V.DataTable.dtNests(v.Local.i).SUFFIX!FIELDVALTRIM)
+		f.Intrinsic.String.Concat(v.Local.sJob,"-",v.Local.sSuffix,v.Local.sJobSuffix)
+		f.Intrinsic.String.Build("JOB='{0}' AND SUFFIX='{1}'",v.Local.sJob,v.Local.sSuffix,v.Local.sSearch)
+		f.Data.DataTable.Select("dtJobs",v.Local.sSearch,v.local.sret)
+		
+		'Set the variables
+		v.Local.spart.Set(v.DataTable.dtJobs(v.Local.sRet).PART!FIELDVALTRIM)
+		v.Local.sdesc.Set(v.DataTable.dtJobs(v.Local.sret).DESCRIPTION!FIELDVALTRIM)
+		v.Local.fQuantity.Set(v.DataTable.dtJobs(v.local.sret).QTY_ORDER!FIELDVALFLOAT)
+		v.Local.sCustomer.Set(v.DataTable.dtJobs(v.local.sret).CUSTOMER!FIELDVALTRIM)
+		'Tie customer code to customer name
+		f.Intrinsic.Control.If(v.Local.scustomer.Trim,=,"")
+			v.Local.scustomer.Set("METALFORM")
+		f.Intrinsic.Control.Else
+			F.Intrinsic.String.BUILD("SELECT UCASE(NAME_CUSTOMER) FROM V_CUSTOMER_MASTER WHERE CUSTOMER='{0}'",v.Local.scustomer.Trim,v.Local.ssql)
+			f.ODBC.Connection!CON.executeandreturn(v.Local.ssql,v.Local.scustomer)
+		f.Intrinsic.Control.EndIf
+		'Adjust Description for job
+		f.Intrinsic.String.Concat(v.Local.sCustomer.Trim,"-",v.Local.spart,"-",v.Local.sdesc,v.Local.spartdesc)
+		
+		'Create the Production Order with its ID/GSS Part Number
+		F.Global.XML.CreateElementNode(v.local.sXMLFile,"PRODUCTIONORDER","")
+		F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"ID",v.Local.sJobSuffix.Trim)
+		F.Global.XML.SetAttributeToNode(v.local.sXMLFile,"PRODUCTIONORDER","ID")
+		F.Global.XML.DestroyNode(v.local.sXMLFile,"ID")
+		
+		'Create the children inside that node with their appropriate values
+		'Create the Part ID 
+		f.Global.XML.CreateElementNode(v.local.sXMLFile,"PartID",v.Local.spart.Trim)
+		f.Global.XML.AppendNode(v.local.sXMLFile,"PRODUCTIONORDER","PartID")
+		f.Global.XML.DestroyNode(v.local.sXMLFile,"PartID")
+
+		'Create the Quantity
+		f.Global.XML.CreateElementNode(v.local.sXMLFile,"QUANTITY",V.Local.fQuantity)
+		f.Global.XML.AppendNode(v.local.sXMLFile,"PRODUCTIONORDER","QUANTITY")
+		f.Global.XML.DestroyNode(v.local.sXMLFile,"QUANTITY")
+		'Create the Project
+		f.Global.XML.CreateElementNode(v.local.sXMLFile,"PROJECT",v.Local.spartdesc)
+		f.Global.XML.AppendNode(v.local.sXMLFile,"PRODUCTIONORDER","PROJECT")
+		f.Global.XML.DestroyNode(v.local.sXMLFile,"PROJECT")
+		'Create the Operation List
+		f.Global.XML.CreateElementNode(v.local.sXMLFile,"OPERATIONLIST","")
+			'Create the Operation List ID
+			'Get the index within the table
+			f.Intrinsic.String.Build("JOB='{0}' AND SUFFIX='{1}' AND (PART='LAS1' OR PART='LAS2')",v.Local.sJob,v.Local.sSuffix,v.Local.sSearch)
+			f.Data.DataTable.Select("dtOper",v.Local.sSearch,v.local.sret)
+			f.Intrinsic.Control.If(v.Local.sret.Trim,<>,"***NORETURN***")
+				'Add 1 to operator ID
+				f.Intrinsic.Math.Add(v.Local.j,1,v.Local.j)
+				'Find the due date for the laser cutter operation
+				f.Intrinsic.String.Build("JOB='{0}' AND SUFFIX='{1}' and (PART='LAS1' OR PART='LAS2')",v.Local.sJob,v.Local.sSuffix,v.Local.sSearch)
+				f.Data.DataTable.Select("dtOper",v.Local.sSearch,v.local.sret)
+				f.Intrinsic.Control.If(v.Local.sret.Trim,<>,"***NORETURN***")
+					v.Local.dDueDate.Set(v.DataTable.dtOper(v.Local.sret).DATE_DUE!FIELDVAL)
+					f.Intrinsic.String.Format(v.Local.dDueDate,"YYYY",v.Local.sYear)
+					f.Intrinsic.String.Format(v.Local.dDueDate,"MM",v.Local.sMonth)
+					f.Intrinsic.String.Format(v.Local.dDueDate,"DD",v.Local.sDay)
+				F.Intrinsic.Control.Else
+					F.Intrinsic.UI.Msgbox("Could not find due date for sequence, will use job header date.")
+					v.Local.dDueDate.Set(v.DataTable.dtNests(v.Local.i).DATE_DUE!FIELDVAL)
+					f.Intrinsic.String.Format(v.Local.dDueDate,"YYYY",v.Local.sYear)
+					f.Intrinsic.String.Format(v.Local.dDueDate,"MM",v.Local.sMonth)
+					f.Intrinsic.String.Format(v.Local.dDueDate,"DD",v.Local.sDay)
+				F.Intrinsic.Control.EndIf
+				'Create Operation ID now
+				f.Global.XML.CreateElementNode(v.local.sXMLFile,"OPERATION","")
+				F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"ID",v.Local.j)
+				F.Global.XML.SetAttributeToNode(v.local.sXMLFile,"OPERATION","ID")
+				F.Global.XML.DestroyNode(v.local.sXMLFile,"ID")
+					'Create the Kind
+						f.Global.XML.CreateElementNode(v.local.sXMLFile,"KIND","2DLASEREXEC")
+						f.Global.XML.AppendNode(v.local.sXMLFile,"OPERATION","KIND")
+						f.Global.XML.DestroyNode(v.local.sXMLFile,"KIND")			
+						'Create the Due Date
+						f.Global.XML.CreateElementNode(v.local.sXMLFile,"DUEDATE","")
+						'Create the Year
+						f.Global.XML.CreateElementNode(v.local.sXMLFile,"YEAR",v.Local.sYear)
+						f.Global.XML.AppendNode(v.local.sXMLFile,"DUEDATE","YEAR")
+						f.Global.XML.DestroyNode(v.local.sXMLFile,"YEAR")	
+						'Create the Month
+						f.Global.XML.CreateElementNode(v.local.sXMLFile,"MONTH",v.Local.sMonth)
+						f.Global.XML.AppendNode(v.local.sXMLFile,"DUEDATE","MONTH")
+						f.Global.XML.DestroyNode(v.local.sXMLFile,"MONTH")	
+						'Create the Day
+						f.Global.XML.CreateElementNode(v.local.sXMLFile,"DAY",v.Local.sDay)
+						f.Global.XML.AppendNode(v.local.sXMLFile,"DUEDATE","DAY")
+						f.Global.XML.DestroyNode(v.local.sXMLFile,"DAY")
+						'Create the Hour
+						f.Global.XML.CreateElementNode(v.local.sXMLFile,"HOUR",0)
+						f.Global.XML.AppendNode(v.local.sXMLFile,"DUEDATE","HOUR")
+						f.Global.XML.DestroyNode(v.local.sXMLFile,"HOUR")
+						'Create the Minutes
+						f.Global.XML.CreateElementNode(v.local.sXMLFile,"MIN",0)
+						f.Global.XML.AppendNode(v.local.sXMLFile,"DUEDATE","MIN")
+						f.Global.XML.DestroyNode(v.local.sXMLFile,"MIN")
+						'Create the Seconds
+						f.Global.XML.CreateElementNode(v.local.sXMLFile,"SEC",0)
+						f.Global.XML.AppendNode(v.local.sXMLFile,"DUEDATE","SEC")
+						f.Global.XML.DestroyNode(v.local.sXMLFile,"SEC")
+						'Create the MSecs
+						f.Global.XML.CreateElementNode(v.local.sXMLFile,"MSEC",0)
+						f.Global.XML.AppendNode(v.local.sXMLFile,"DUEDATE","MSEC")
+						f.Global.XML.DestroyNode(v.local.sXMLFile,"MSEC")
+						'Create the TZ
+						f.Global.XML.CreateElementNode(v.local.sXMLFile,"TZ",0)
+						f.Global.XML.AppendNode(v.local.sXMLFile,"DUEDATE","TZ")
+						f.Global.XML.DestroyNode(v.local.sXMLFile,"TZ")	
+					'Destroy Due Date Node
+					f.Global.XML.AppendNode(v.local.sXMLFile,"OPERATION","DUEDATE")
+					f.Global.XML.DestroyNode(v.local.sXMLFile,"DUEDATE")				
+					'Create the Operation Resource Type List
+					f.Global.XML.CreateElementNode(v.local.sXMLFile,"OPERATIONRESOURCETYPELIST","")
+					f.Global.XML.AppendNode(v.local.sXMLFile,"OPERATION","OPERATIONRESOURCETYPELIST")
+					f.Global.XML.DestroyNode(v.local.sXMLFile,"OPERATIONRESOURCETYPELIST")	
+					'Create the Operation Resource List
+					f.Global.XML.CreateElementNode(v.local.sXMLFile,"OPERATIONRESOURCELIST","")
+					f.Global.XML.AppendNode(v.local.sXMLFile,"OPERATION","OPERATIONRESOURCELIST")
+					f.Global.XML.DestroyNode(v.local.sXMLFile,"OPERATIONRESOURCELIST")	
+				'Destroy Operation Node
+				f.Global.XML.AppendNode(v.local.sXMLFile,"OPERATIONLIST","OPERATION")
+				f.Global.XML.DestroyNode(v.local.sXMLFile,"OPERATION")	
+			F.Intrinsic.Control.EndIf
+		'Destroy Operation list Note
+		f.Global.XML.AppendNode(v.local.sXMLFile,"PRODUCTIONORDER","OPERATIONLIST")
+		f.Global.XML.DestroyNode(v.local.sXMLFile,"OPERATIONLIST")
+		'Create tag for the customer
+		f.Global.XML.CreateElementNode(v.local.sXMLFile,"TAGS","")				
+		f.Global.XML.CreateElementNode(v.local.sXMLFile,"TAG",v.Local.scustomer.Trim)				
+		F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"Type","Customer")
+		F.Global.XML.SetAttributeToNode(v.local.sXMLFile,"TAG","Type")
+		F.Global.XML.DestroyNode(v.local.sXMLFile,"Type")
+		f.Global.XML.AppendNode(v.local.sXMLFile,"TAGS","TAG")
+		f.Global.XML.DestroyNode(v.local.sXMLFile,"TAG")	
+		f.Global.XML.AppendNode(v.local.sXMLFile,"PRODUCTIONORDER","TAGS")
+		f.Global.XML.DestroyNode(v.local.sXMLFile,"TAGS")	
+
+		'Create the documentation
+		f.Global.XML.CreateElementNode(v.local.sXMLFile,"DOCUMENTATION","")
+		f.Global.XML.AppendNode(v.local.sXMLFile,"PRODUCTIONORDER","DOCUMENTATION")
+		f.Global.XML.DestroyNode(v.local.sXMLFile,"DOCUMENTATION")
+		'Destroy the nodes
+		F.Global.XML.DestroyNode(v.local.sXMLFile,"ID")
+		f.Global.XML.AppendNode(v.local.sXMLFile,"PRODUCTIONORDERLIST","PRODUCTIONORDER")
+		F.Global.XML.DestroyNode(v.local.sXMLFile,"PRODUCTIONORDER")
+	F.Intrinsic.Control.EndIf
+	'Reset operation ID counter
+	v.Local.j.Set(0)
+f.Intrinsic.Control.next(v.Local.i)
+f.Global.XML.DestroyNode(v.local.sXMLFile,"PRODUCTIONORDERIMPORT")
+F.Global.XML.DestroyNode(v.local.sXMLFile,"PRODUCTIONORDERLIST")
+
+F.global.xml.saveDocument(v.local.sXMLFile,V.Local.sCADMANPathJob,V.Local.sCADMANFileJob)
+f.Global.XML.CloseDocument(v.local.sXMLFile)
+F.Intrinsic.task.ShellExec(V.Caller.Handle,"OPEN",v.Local.scadmanpathjob,"","",5)
+F.Intrinsic.Control.Catch
+	F.Intrinsic.UI.Msgbox(v.Ambient.ErrorDescription)
+	f.ODBC.Connection!CON.Close
+	f.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+
+Program.Sub.JOBNestingExport.End
+
+Program.Sub.SDIGuts.Start
+f.Intrinsic.Control.Try
+'Create the Elements Next
+v.Local..BulkDeclareString(sSQL,sMyVal,sTempFullPath,sXMLFile,sThickness,spart,smat,sSearch,sRet,shold,sDrawFile,sDrawPath,sFullPath,sFailPath)
+V.Local.sXMLFile.Set(v.Args.sXML)
+V.Local.I.Declare(STRING)
+v.Local.lLinkID.Declare(long)
+v.Local.lIPTFound.Declare(long)
+v.Local.x.Declare(long)
+v.Local.bExists.Declare(Boolean)
+
+F.Intrinsic.Control.If(v.Args.sCADMANJOB,=,"Y")
+	F.Global.XML.CreateElementNode(v.local.sXMLFile,"PARTTYPELIST","")
+	F.Global.XML.AppendNode(v.local.sXMLFile,"PRODUCTIONORDERIMPORT","PARTTYPELIST")
+f.Intrinsic.Control.Else
+	F.Global.XML.CreateElementNode(v.local.sXMLFile,"PARTTYPEIMPORT","")
+	F.Global.XML.CreateElementNode(v.local.sXMLFile,"PARTTYPELIST","")
+	F.Global.XML.AppendNodeToRoot(v.local.sXMLFile,"PARTTYPEIMPORT")
+	F.Global.XML.AppendNode(v.local.sXMLFile,"PARTTYPEIMPORT","PARTTYPELIST")
+f.Intrinsic.Control.EndIf
+
+'Loop through all values
+f.Intrinsic.Control.For(v.Local.i,0,v.DataTable.dtNests.RowCount--,1)
+	'This is CADMAN SDI
+	'CHANGED FROM *CMS to *CMP 30-06-2018
+	F.Intrinsic.Control.If(v.DataTable.dtNests(v.Local.i).PART!FieldValTrim,=,"PRO1")
+		f.Intrinsic.String.Build("JOB='{0}' AND SUFFIX='{1}'",v.DataTable.dtNests(v.Local.i).JOB!FIELDVALTRIM,V.DataTable.dtNests(v.Local.i).SUFFIX!FIELDVALTRIM,v.Local.sSearch)
+		f.Data.DataTable.Select("dtJobs",v.Local.sSearch,v.local.sret)
+		v.Local.spart.Set(v.DataTable.dtJobs(v.Local.sRet).PART!FIELDVALTRIM)
+		
+		'Create the PartType with its ID/GSS Part Number
+		F.Global.XML.CreateElementNode(v.local.sXMLFile,"PARTTYPE","")
+		F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"ID",v.Local.spart.Trim)
+		F.Global.XML.SetAttributeToNode(v.local.sXMLFile,"PARTTYPE","ID")
+		
+		'Create the children inside that node with their appropriate values
+		'Create Material ID
+		f.Intrinsic.String.Build("JOB='{0}' AND SUFFIX='{1}'",v.DataTable.dtNests(v.Local.i).JOB!FIELDVALTRIM,V.DataTable.dtNests(v.Local.i).SUFFIX!FIELDVALTRIM,v.Local.sSearch)
+		f.Data.DataTable.Select("dtMats",v.Local.sSearch,v.local.sret)
+		f.Intrinsic.Control.If(v.Local.sret.Trim,<>,"***NORETURN***")
+			v.Local.smat.Set(v.DataTable.dtMats(v.Local.sRet).DESCRIPTION_3!FIELDVALTRIM)
+			f.Global.XML.CreateElementNode(v.local.sXMLFile,"MaterialID",v.Local.smat)
+			f.Global.XML.AppendNode(v.local.sXMLFile,"PARTTYPE","MaterialID")
+			F.Global.XML.DestroyNode(v.local.sXMLFile,"MaterialID")
+		F.Intrinsic.Control.EndIf
+		
+		'Annoying CADMAN issue, have to flip these tags so that it imports properly into JOB and SDI
+		F.Intrinsic.Control.If(v.Args.sCADMANJOB,=,"Y")
+			'Create the Thickness FIRST FOR JOB
+			f.Intrinsic.String.Build("JOB='{0}' AND SUFFIX='{1}'",v.DataTable.dtNests(v.Local.i).JOB!FIELDVALTRIM,V.DataTable.dtNests(v.Local.i).SUFFIX!FIELDVALTRIM,v.Local.sSearch)
+			f.Data.DataTable.Select("dtMats",v.Local.sSearch,v.local.sret)
+			v.Local.smat.Set(v.DataTable.dtMats(v.Local.sRet).THICKNESS!FIELDVALTRIM)
+			f.Global.XML.CreateElementNode(v.local.sXMLFile,"THICKNESS",v.Local.smat)
+			f.Global.XML.AppendNode(v.local.sXMLFile,"PARTTYPE","THICKNESS")
+			F.Global.XML.DestroyNode(v.local.sXMLFile,"THICKNESS")
+		
+			f.Global.XML.CreateElementNode(v.local.sXMLFile,"UNIT","MM")
+			f.Global.XML.AppendNode(v.local.sXMLFile,"PARTTYPE","UNIT")
+			F.Global.XML.DestroyNode(v.local.sXMLFile,"UNIT")
+		f.Intrinsic.Control.Else
+			'CREATE UNIT OF MEASURE FIRST FOR SDI
+			f.Global.XML.CreateElementNode(v.local.sXMLFile,"UNIT","MM")
+			f.Global.XML.AppendNode(v.local.sXMLFile,"PARTTYPE","UNIT")
+			F.Global.XML.DestroyNode(v.local.sXMLFile,"UNIT")
+			
+			'Create the Thickness
+			f.Intrinsic.String.Build("JOB='{0}' AND SUFFIX='{1}'",v.DataTable.dtNests(v.Local.i).JOB!FIELDVALTRIM,V.DataTable.dtNests(v.Local.i).SUFFIX!FIELDVALTRIM,v.Local.sSearch)
+			f.Data.DataTable.Select("dtMats",v.Local.sSearch,v.local.sret)
+			v.Local.smat.Set(v.DataTable.dtMats(v.Local.sRet).THICKNESS!FIELDVALTRIM)
+			f.Global.XML.CreateElementNode(v.local.sXMLFile,"THICKNESS",v.Local.smat)
+			f.Global.XML.AppendNode(v.local.sXMLFile,"PARTTYPE","THICKNESS")
+			F.Global.XML.DestroyNode(v.local.sXMLFile,"THICKNESS")
+		f.Intrinsic.Control.Endif
+		
+		'Create the document path
+		f.Intrinsic.String.Build("ID='{0}'",v.Local.spart.trim,v.Local.sSearch)
+		f.Data.DataTable.Select("dtLink",v.Local.sSearch,v.local.sret)
+		f.Intrinsic.String.Split(v.Local.sret,"*!*",v.Local.sret)
+		f.Intrinsic.Control.If(v.Local.sret.UBound,>,0)
+			'f.Intrinsic.Debug.ShowCallerInfo
+			'Found more than two
+			f.Intrinsic.Control.For(v.Local.x,0,v.Local.sret.ubound,1)
+				f.Intrinsic.Control.If(v.DataTable.dtLink(v.Local.sret(v.Local.x)).LINK_ID!FIELDVALTRIM,<>,"")
+					f.Intrinsic.String.build("select * from atg_doc_assoc where link_id='{0}'",v.DataTable.dtLink(v.Local.sret(v.Local.x)).LINK_ID!FIELDVALTRIM,v.Local.ssql)
+					f.ODBC.Connection!CON.executeandreturn(V.Local.SSQL,v.Local.smyval)
+					f.Intrinsic.Control.If(v.Local.smyval.trim,<>,"")
+						v.Local.lLinkID.Set(v.DataTable.dtLink(v.Local.sret(v.Local.x)).LINK_ID!FIELDVAL)
+					f.Intrinsic.Control.EndIf
+				f.Intrinsic.Control.EndIf
+			f.Intrinsic.Control.Next(v.Local.x)
+		f.Intrinsic.Control.Else
+			v.Local.lLinkID.Set(v.DataTable.dtLink(v.Local.sret).LINK_ID!FIELDVAL)
+		f.Intrinsic.Control.EndIf
+		f.Intrinsic.String.Build("LINK_ID='{0}' AND GRP_ID='{1}'",v.Local.lLinkID,9,v.Local.sSearch)
+		f.Data.DataTable.Select("dtDocA",v.Local.sSearch,v.Local.sRet)
+		
+		f.Intrinsic.Control.If(v.Local.sret.Trim,<>,"***NORETURN***")
+			'Found file
+			v.Local.sDrawFile.Set(v.DataTable.dtDocA(v.Local.sret).FILE!FIELDVALTRIM)
+			v.Local.sDrawPath.Set(v.DataTable.dtDocA(v.local.sret).PATH!FIELDVALTRIM)
+			
+			'9-12-2016 If the part has already been programmed in boost, set the drawing source to a pdf file
+			F.intrinsic.control.if(V.local.sTextInfo1.trim,<>,"YES")
+				'Reset drawing source for now, will omit later	
+				F.Intrinsic.String.Instr(V.Local.sDrawFile,".ipt",0,V.Local.lIPTFound)
+				F.Intrinsic.Control.If(V.Local.lIPTFound,>,0)
+					'Pick the GEO FILE, replace IPT with geo for now
+					'Update pick the DXF instead... 15-9-2016
+					F.Intrinsic.String.Replace(V.Local.sDrawFile,".ipt",".dxf",V.Local.sDrawFile)
+				F.Intrinsic.Control.Else
+					'Do nothing
+				F.Intrinsic.control.EndIf
+			F.intrinsic.control.else
+				v.Local.sdrawpath.Set("\\Mf-vglobalshop\apps\Global\SP2\")
+				V.Local.sDrawFile.Set("MetalFormLogo-pdf.pdf")
+			F.intrinsic.control.endif
+			
+			f.Intrinsic.String.Concat(v.Local.sDrawPath,v.Local.sDrawFile,v.Local.sFullPath)
+			f.Intrinsic.String.Concat(v.Global.sSDIDrawPath,v.Local.sdrawfile,v.Local.sTempFullPath)
+			f.Intrinsic.File.CopyFile(v.Local.sFullPath,v.local.sTempFullPath)
+		f.Intrinsic.Control.EndIf
+		F.Global.XML.CreateElementNode(v.local.sXMLFile,"IMPORTFILENAME",v.Local.sTempFullPath)
+		f.Global.XML.AppendNode(v.local.sXMLFile,"PARTTYPE","IMPORTFILENAME")
+		F.Global.XML.DestroyNode(v.local.sXMLFile,"IMPORTFILENAME")
+		
+		'Destroy the nodes
+		F.Global.XML.DestroyNode(v.local.sXMLFile,"ID")
+		f.Global.XML.AppendNode(v.local.sXMLFile,"PARTTYPELIST","PARTTYPE")
+		F.Global.XML.DestroyNode(v.local.sXMLFile,"PARTTYPE")
+	F.Intrinsic.Control.EndIf
+f.Intrinsic.Control.next(v.Local.i)
+f.Global.XML.DestroyNode(v.local.sXMLFile,"PARTTYPEIMPORT")
+F.Global.XML.DestroyNode(v.local.sXMLFile,"PARTTYPELIST")
+
+'If it is SDI, add in the batch command
+F.Intrinsic.Control.If(v.Args.sCADMANJOB,=,"Y")
+f.Intrinsic.Control.Else
+	F.Global.XML.CreateElementNode(v.local.sXMLFile,"BATCH","")
+	F.Global.XML.AppendNodeToRoot(v.local.sXMLFile,"BATCH")
+f.Intrinsic.Control.EndIf
+
+'Loop through all values
+f.Intrinsic.Control.For(v.Local.i,0,v.DataTable.dtNests.RowCount--,1)
+	'This is CADMAN SDI
+	F.Intrinsic.Control.If(v.DataTable.dtNests(v.Local.i).PART!FieldValTrim,=,"*CMS")
+		'Create the PartType with its ID/GSS Part Number
+		
+		F.Global.XML.CreateElementNode(v.local.sXMLFile,"COMMAND","")
+		F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"Command","HANDLEFILE_BATCH")
+		F.Global.XML.SetAttributeToNode(v.local.sXMLFile,"COMMAND","Command")
+		F.Global.XML.AppendNode(v.local.sXMLFile,"BATCH","COMMAND")	
+			F.Global.XML.CreateElementNode(v.local.sXMLFile,"PARAMETERS","")
+			F.Global.XML.AppendNode(v.Local.sxmlfile,"COMMAND","PARAMETERS")
+				f.Intrinsic.String.Build("JOB='{0}' AND SUFFIX='{1}'",v.DataTable.dtNests(v.Local.i).JOB!FIELDVALTRIM,V.DataTable.dtNests(v.Local.i).SUFFIX!FIELDVALTRIM,v.Local.sSearch)
+				f.Data.DataTable.Select("dtJobs",v.Local.sSearch,v.local.sret)
+				V.Local.spart.Set(v.DataTable.dtJobs(v.Local.sRet).PART!FIELDVALTRIM)
+				'Create the document path
+				f.Intrinsic.String.Build("ID='{0}'",v.Local.spart.trim,v.Local.sSearch)
+				f.Data.DataTable.Select("dtLink",v.Local.sSearch,v.local.sret)
+				f.Intrinsic.String.Split(v.Local.sret,"*!*",v.Local.sret)
+				f.Intrinsic.Control.If(v.Local.sret.UBound,>,0)
+					'f.Intrinsic.Debug.ShowCallerInfo
+					'Found more than two
+					f.Intrinsic.Control.For(v.Local.x,0,v.Local.sret.ubound,1)
+						f.Intrinsic.Control.If(v.DataTable.dtLink(v.Local.sret(v.Local.x)).LINK_ID!FIELDVALTRIM,<>,"")
+							f.Intrinsic.String.build("select * from atg_doc_assoc where link_id='{0}'",v.DataTable.dtLink(v.Local.sret(v.Local.x)).LINK_ID!FIELDVALTRIM,v.Local.ssql)
+							f.ODBC.Connection!CON.executeandreturn(V.Local.SSQL,v.Local.smyval)
+							f.Intrinsic.Control.If(v.Local.smyval.trim,<>,"")
+								v.Local.lLinkID.Set(v.DataTable.dtLink(v.Local.sret(v.Local.x)).LINK_ID!FIELDVAL)
+							f.Intrinsic.Control.EndIf
+						f.Intrinsic.Control.EndIf
+					f.Intrinsic.Control.Next(v.Local.x)
+				f.Intrinsic.Control.Else
+					v.Local.lLinkID.Set(v.DataTable.dtLink(v.Local.sret).LINK_ID!FIELDVAL)
+				f.Intrinsic.Control.EndIf
+
+				f.Intrinsic.String.Build("LINK_ID='{0}' AND GRP_ID='{1}'",v.Local.lLinkID,2,v.Local.sSearch)
+				f.Data.DataTable.Select("dtDocA",v.Local.sSearch,v.Local.sRet)
+				v.Local.sDrawPath.Set(v.DataTable.dtDocA(v.local.sret).PATH!FIELDVALTRIM)
+				
+				'Create the part type ID parameter
+				F.Global.XML.CreateElementNode(v.local.sXMLFile,"PARAMETER","")
+				F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"ID","PARTTYPEID")
+				F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"Value",v.Local.spart)
+				F.Global.XML.SetAttributeToNode(v.local.sXMLFile,"PARAMETER","ID")
+				F.Global.XML.SetAttributeToNode(v.local.sXMLFile,"PARAMETER","Value")
+				F.Global.XML.AppendNode(v.Local.sxmlfile,"PARAMETERS","PARAMETER")
+				f.Global.XML.DestroyNode(v.Local.sXMLFILE,"ID")
+				f.Global.XML.DestroyNode(v.Local.sXMLFILE,"Value")
+				f.Global.XML.DestroyNode(v.Local.sXMLFILE,"PARAMETER")
+				'Create the output path ID parameter
+				F.Global.XML.CreateElementNode(v.local.sXMLFile,"PARAMETER","")
+				F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"ID","OUTPUTPATH")
+				F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"Value",v.local.sdrawpath)
+				F.Global.XML.SetAttributeToNode(v.local.sXMLFile,"PARAMETER","ID")
+				F.Global.XML.SetAttributeToNode(v.local.sXMLFile,"PARAMETER","Value")
+				F.Global.XML.AppendNode(v.Local.sxmlfile,"PARAMETERS","PARAMETER")
+				f.Global.XML.DestroyNode(v.Local.sXMLFILE,"ID")
+				f.Global.XML.DestroyNode(v.Local.sXMLFILE,"Value")
+				f.Global.XML.DestroyNode(v.Local.sXMLFILE,"PARAMETER")
+			F.Global.XML.AppendNode(v.Local.sxmlfile,"COMMAND","PARAMETERS")
+			f.Global.XML.DestroyNode(v.Local.sXMLFILE,"PARAMETERS")
+		f.Global.XML.DestroyNode(v.Local.sXMLFILE,"Command")
+		f.Global.XML.DestroyNode(v.Local.sXMLFILE,"COMMAND")
+'		F.Global.XML.CreateElementNode(v.local.sXMLFile,"PARAMETERS","")
+'		F.Global.XML.CreateAttributeNode(v.local.sXMLFile,"PARAMETER",v.Local.spart.Trim)
+	F.Intrinsic.Control.EndIf
+f.Intrinsic.Control.next(v.Local.i)
+
+'If it is SDI, add in the batch command
+F.Intrinsic.Control.If(v.Args.sCADMANJOB,=,"Y")
+f.Intrinsic.Control.Else
+	f.Global.XML.DestroyNode(v.local.sXMLFile,"BATCH")
+	F.Global.XML.DestroyNode(v.local.sXMLFile,"COMMAND")
+f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.Catch
+	f.Intrinsic.UI.Msgbox(v.Ambient.ErrorDescription)
+	f.ODBC.Connection!CON.Close
+	f.Intrinsic.Control.End
+f.Intrinsic.Control.EndTry
+Program.Sub.SDIGuts.End
+
+Program.Sub.cmdFrom_Click.Start
+V.Local.sError.Declare(String)
+V.Local.sRet.Declare(String)
+V.Local.sSQL.Declare(String)
+V.Local.sTitles.Declare(String)
+V.Local.sWidths.Declare(String)
+V.Local.sPart.Declare(String)
+V.Local.sRev.Declare(String)
+V.Local.sPartRev.Declare(String)
+v.Local.sToSuffix.Declare(string)
+
+'Override GSQL browsers with GAB browser.  GAB browser is customer specific.
+V.Local.scc.Declare(String)
+F.Intrinsic.String.Split("Job*!*Suffix*!*Part*!*Description","*!*",V.Local.sTitles)
+F.Intrinsic.String.Split("1900*!*900*!*2000*!*3200","*!*",V.Local.sWidths)
+F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+F.Intrinsic.String.Concat("SELECT JOB, SUFFIX, PART, DESCRIPTION FROM V_JOB_HEADER order by job, suffix","",V.Local.sSQL)
+F.Intrinsic.UI.Browser("Select a Job ","con",V.Local.sSQL,V.Local.sTitles,V.Local.sWidths,15000,10000,V.Local.sRet)
+F.Intrinsic.Control.If(V.Local.sRet,<>,"***CANCEL***")
+	f.Intrinsic.String.Split(v.Local.sRet,"*!*",v.Local.sRet)
+	gui.frmExport.txtFromJob.Text(V.Local.sRet(0).Trim)
+	gui.frmExport.txtFromSuffix.Text(V.Local.sRet(1).Trim)
+	
+	F.Intrinsic.String.Concat("SELECT MAX(SUFFIX) FROM V_JOB_HEADER WHERE JOB='",v.Local.sRet(0).trim,"'",V.Local.sSQL)
+	f.ODBC.Connection!CON.executeandreturn(v.Local.sSQL,v.Local.sToSuffix)
+
+	gui.frmExport.txtToJob.Text(V.Local.sRet(0).Trim)
+	gui.frmExport.txtToSuffix.Text(v.Local.sToSuffix)
+F.Intrinsic.Control.EndIf
+Program.Sub.cmdFrom_Click.End
+
+Program.Sub.cmdTo_Click.Start
+V.Local.sError.Declare(String)
+V.Local.sRet.Declare(String)
+V.Local.sSQL.Declare(String)
+V.Local.sTitles.Declare(String)
+V.Local.sWidths.Declare(String)
+V.Local.sPart.Declare(String)
+V.Local.sRev.Declare(String)
+V.Local.sPartRev.Declare(String)
+
+'Override GSQL browsers with GAB browser.  GAB browser is customer specific.
+V.Local.scc.Declare(String)
+F.Intrinsic.String.Split("Job*!*Suffix*!*Part*!*Description","*!*",V.Local.sTitles)
+F.Intrinsic.String.Split("1900*!*900*!*2000*!*3200","*!*",V.Local.sWidths)
+F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+F.Intrinsic.String.Concat("SELECT JOB, SUFFIX, PART, DESCRIPTION FROM V_JOB_HEADER order by job, suffix","",V.Local.sSQL)
+F.Intrinsic.UI.Browser("Select a Job ","con",V.Local.sSQL,V.Local.sTitles,V.Local.sWidths,15000,10000,V.Local.sRet)
+F.Intrinsic.Control.If(V.Local.sRet,<>,"***CANCEL***")
+	f.Intrinsic.String.Split(v.Local.sRet,"*!*",v.Local.sRet)
+	gui.frmExport.txtToJob.Text(V.Local.sRet(0).Trim)
+	gui.frmExport.txtToSuffix.Text(V.Local.sRet(1).Trim)
+F.Intrinsic.Control.EndIf
+Program.Sub.cmdTo_Click.End
+
+Program.Sub.cmdJobs_Click.Start
+GUI.frmExport..Visible(False)
+f.Intrinsic.UI.InvokeWaitDialog("Processing, please wait.")
+v.Local.ssqlNest.Declare(string)
+F.Intrinsic.Control.If(V.DataTable.dtNests.Exists)
+	F.Data.DataTable.Close("dtNests")
+f.Intrinsic.Control.EndIf
+
+
+f.Intrinsic.String.Build("SELECT * from V_JOB_OPERATIONS LEFT JOIN WORKCENTERS ON WORKCENTERS.MACHINE = V_JOB_OPERATIONS.PART WHERE V_JOB_OPERATIONS.LMO='L' AND WORKCENTERS.NESTING_INTRFC='Y' AND ((JOB>='{0}' and suffix>='{1}') AND (JOB<='{2}' and suffix<='{3}'))",v.Screen.frmExport!txtFromJob.text,v.Screen.frmExport!txtFromSuffix.text,v.Screen.frmExport!txtToJob.text,v.Screen.frmExport!txtToSuffix.text,v.Local.ssqlNest)
+f.Data.DataTable.CreateFromSQL("dtNests","con",v.Local.ssqlNest,true)
+
+f.Intrinsic.Control.CallSub(createTables)
+
+F.Intrinsic.control.CallSub(JOBNestingExport)
+f.Intrinsic.UI.CloseWaitDialog
+GUI.frmExport..Show
+Program.Sub.cmdJobs_Click.End
+
+Program.Sub.frmExport_UnLoad.Start
+f.ODBC.connection!CON.Close
+f.Intrinsic.Control.End
+Program.Sub.frmExport_UnLoad.End
